@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
 ]
 
 // Pages that are fully implemented and navigable
-const LIVE_PAGES = new Set<Page>(['sales', 'customer-reviews', 'schedule', 'purchases'])
+const LIVE_PAGES = new Set<Page>(['sales', 'customer-reviews', 'schedule', 'purchases', 'inventory'])
 
 interface SideNavProps {
   currentPage: Page

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronUp, ChevronDown, DotsIcon } from '../components/icons'
+import OrderItemDrawer, { DRAWER_ITEMS, type DrawerItem } from '../components/OrderItemDrawer'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -160,12 +161,13 @@ function QtyControl({
 // ─── Supplier card (expanded) ─────────────────────────────────────────────────
 
 function ExpandedOrderCard({
-  order, onToggle, onSend, onQtyChange,
+  order, onToggle, onSend, onQtyChange, onItemClick,
 }: {
   order: SupplierOrder
   onToggle: () => void
   onSend: () => void
   onQtyChange: (itemId: string, qty: number) => void
+  onItemClick: (itemId: string) => void
 }) {
   const items = order.items ?? []
   const { subtotal, vat, total } = totalForOrder(items)
@@ -210,10 +212,15 @@ function ExpandedOrderCard({
         {/* Line items */}
         {items.map((item) => (
           <div key={item.id} className="flex items-center border-b border-dashed border-[#e5e5e5]">
-            {/* Item name + description */}
+            {/* Item name + description — click to open detail drawer */}
             <div className="flex-1 flex items-center gap-3 px-3 py-3">
               <div className="flex flex-col gap-0 flex-1 min-w-0">
-                <span className="text-[14px] text-[#262626] leading-5 tracking-[-0.15px]">{item.name}</span>
+                <button
+                  onClick={() => onItemClick(item.id)}
+                  className="text-[14px] text-[#262626] leading-5 tracking-[-0.15px] text-left hover:text-[#735cf6] hover:underline transition-colors w-fit"
+                >
+                  {item.name}
+                </button>
                 <span className="text-[12px] text-[#a3a3a3] leading-4">{item.description}</span>
               </div>
               <span className="px-1 py-0 rounded bg-[#e5e5e5] text-[10px] text-[#262626] leading-4 tracking-[0.12px] shrink-0">
@@ -302,12 +309,13 @@ function CollapsedOrderCard({ order, onToggle }: { order: SupplierOrder; onToggl
 // ─── Order group ──────────────────────────────────────────────────────────────
 
 function OrderGroupSection({
-  group, onToggleOrder, onSendOrder, onQtyChange,
+  group, onToggleOrder, onSendOrder, onQtyChange, onItemClick,
 }: {
   group: OrderGroup
   onToggleOrder: (orderId: string) => void
   onSendOrder: (orderId: string) => void
   onQtyChange: (orderId: string, itemId: string, qty: number) => void
+  onItemClick: (itemId: string) => void
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -337,6 +345,7 @@ function OrderGroupSection({
                 onToggle={() => onToggleOrder(order.id)}
                 onSend={() => onSendOrder(order.id)}
                 onQtyChange={(itemId, qty) => onQtyChange(order.id, itemId, qty)}
+                onItemClick={onItemClick}
               />
             ) : (
               <CollapsedOrderCard
@@ -359,6 +368,12 @@ function OrderGroupSection({
 export default function PurchasesPage() {
   const [tab, setTab] = useState<'recommended' | 'draft'>('recommended')
   const [groups, setGroups] = useState<OrderGroup[]>(INITIAL_GROUPS)
+  const [drawerItemId, setDrawerItemId] = useState<string | null>(null)
+
+  // All item ids across expanded orders (for prev/next navigation in drawer)
+  const allItemIds = groups.flatMap(g => g.orders.flatMap(o => o.items?.map(it => it.id) ?? []))
+  const drawerIndex = drawerItemId ? allItemIds.indexOf(drawerItemId) : -1
+  const drawerItem: DrawerItem | null = drawerItemId ? (DRAWER_ITEMS[drawerItemId] ?? null) : null
 
   // Count unsent orders
   const unsentCount = groups.flatMap(g => g.orders).filter(o => !o.sent).length
@@ -474,6 +489,7 @@ export default function PurchasesPage() {
                   onToggleOrder={(orderId) => toggleOrder(group.id, orderId)}
                   onSendOrder={(orderId) => sendOrder(group.id, orderId)}
                   onQtyChange={(orderId, itemId, qty) => changeQty(group.id, orderId, itemId, qty)}
+                  onItemClick={(itemId) => setDrawerItemId(itemId)}
                 />
               ))}
             </div>
@@ -484,6 +500,18 @@ export default function PurchasesPage() {
           )}
         </div>
       </div>
+
+      {/* Order item detail drawer */}
+      {drawerItem && (
+        <OrderItemDrawer
+          item={drawerItem}
+          itemIndex={drawerIndex}
+          totalItems={allItemIds.length}
+          onClose={() => setDrawerItemId(null)}
+          onPrev={() => drawerIndex > 0 && setDrawerItemId(allItemIds[drawerIndex - 1])}
+          onNext={() => drawerIndex < allItemIds.length - 1 && setDrawerItemId(allItemIds[drawerIndex + 1])}
+        />
+      )}
     </div>
   )
 }

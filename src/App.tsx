@@ -5,6 +5,7 @@ import CustomerReviewsPage from './pages/CustomerReviewsPage'
 import SalesPage from './pages/SalesPage'
 import SchedulePage from './pages/SchedulePage'
 import PurchasesPage from './pages/PurchasesPage'
+import InventoryPage from './pages/InventoryPage'
 import AskNoryPanel from './components/AskNoryPanel'
 
 export type Page =
@@ -19,7 +20,7 @@ export type Page =
   | 'purchases'
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('purchases')
+  const [currentPage, setCurrentPage] = useState<Page>('inventory')
   const [isAskNoryOpen, setIsAskNoryOpen] = useState(false)
 
   return (
@@ -35,10 +36,10 @@ export default function App() {
 
           {currentPage === 'sales'            && <SalesPage />}
           {currentPage === 'customer-reviews' && <CustomerReviewsPage />}
-          {currentPage === 'purchases'        && <PurchasesPage />}
+          {currentPage === 'purchases'  && <PurchasesPage />}
+          {currentPage === 'inventory'  && <InventoryPage />}
           {(currentPage === 'overview' ||
             currentPage === 'labour'   ||
-            currentPage === 'inventory'||
             currentPage === 'pl'       ||
             currentPage === 'budget')  && (
             <div className="flex-1 flex items-center justify-center text-[14px] text-[#a3a3a3]">

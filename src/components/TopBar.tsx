@@ -1,13 +1,21 @@
 import type { Page } from '../App'
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarIcon, CaretUpDown, NorySparkle, DotsIcon } from './icons'
 
-const breadcrumbs: Record<Page, { parent: string; child: string; childHasDropdown: boolean }> = {
+interface BreadcrumbEntry {
+  parent: string
+  child: string
+  childHasDropdown: boolean
+  grandchild?: string
+  grandchildHasDropdown?: boolean
+}
+
+const breadcrumbs: Record<Page, BreadcrumbEntry> = {
   'schedule':         { parent: 'Insights',   child: 'Schedule',          childHasDropdown: false },
   'sales':            { parent: 'Insights',   child: 'Sales',             childHasDropdown: true  },
   'customer-reviews': { parent: 'Insights',   child: 'Customer Insights', childHasDropdown: false },
   'overview':         { parent: 'Insights',   child: 'Overview',          childHasDropdown: false },
   'labour':           { parent: 'Insights',   child: 'Labour',            childHasDropdown: false },
-  'inventory':        { parent: 'Insights',   child: 'Inventory',         childHasDropdown: false },
+  'inventory':        { parent: 'Insights',   child: 'Inventory',         childHasDropdown: false, grandchild: 'Liffey Valley', grandchildHasDropdown: true },
   'pl':               { parent: 'Insights',   child: 'P&L',               childHasDropdown: false },
   'budget':           { parent: 'Insights',   child: 'Budget',            childHasDropdown: false },
   'purchases':        { parent: 'Purchases',  child: 'Place orders',      childHasDropdown: false },
@@ -22,7 +30,7 @@ interface TopBarProps {
 }
 
 export default function TopBar({ page, onAskNory }: TopBarProps) {
-  const { parent, child, childHasDropdown } = breadcrumbs[page] ?? breadcrumbs['overview']
+  const { parent, child, childHasDropdown, grandchild, grandchildHasDropdown } = breadcrumbs[page] ?? breadcrumbs['overview']
   const isSimple = SIMPLE_PAGES.includes(page)
 
   return (
@@ -40,6 +48,15 @@ export default function TopBar({ page, onAskNory }: TopBarProps) {
             {child}
             {childHasDropdown && <ChevronDown color="#a3a3a3" size={14} />}
           </button>
+          {grandchild && (
+            <>
+              <span className="text-[16px] text-[#d4d4d4] mx-1">/</span>
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-[#fafafa] text-[14px] text-[#262626] font-medium">
+                {grandchild}
+                {grandchildHasDropdown && <ChevronDown color="#a3a3a3" size={14} />}
+              </button>
+            </>
+          )}
         </div>
 
         {/* Date range picker — hidden for simple pages */}
