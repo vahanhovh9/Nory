@@ -6,7 +6,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ShiftKind = 'empty' | 'shift' | 'unavailable' | 'holiday' | 'timeoff'
+type ShiftKind = 'empty' | 'shift' | 'unavailable' | 'holiday' | 'timeoff' | 'ai'
 type Weather = 'rain' | 'sun' | 'cloud-sun'
 type AIPhase = 'idle' | 'creating' | 'building' | 'done'
 type ViewMode = 'week' | 'day'
@@ -16,6 +16,7 @@ interface Shift {
   role?: string
   time?: string
   compliance?: boolean
+  ai?: boolean
 }
 
 interface Employee {
@@ -112,6 +113,11 @@ const DEPTS: Dept[] = [
     ],
   },
 ]
+
+// AI-suggested shift presets (added after creation)
+const AI_M: Shift  = { kind: 'ai', role: 'Location Manager', time: '09:00 – 17:00', ai: true }
+const AI_F: Shift  = { kind: 'ai', role: 'FOH Lead',         time: '10:00 – 18:00', ai: true }
+const AI_B: Shift  = { kind: 'ai', role: 'Back of House',     time: '09:00 – 15:00', ai: true }
 
 const DEPT_COLORS: Record<string, { border: string; text: string; bg: string }> = {
   'Management':     { border: '#4ade82', text: '#16a34a', bg: 'rgba(74,222,128,0.08)' },
@@ -211,6 +217,23 @@ function ShiftCell({
 
   if (shift.kind === 'empty') {
     return <div className="flex-1 h-full border-l border-[#e5e5e5]" />
+  }
+
+  // AI-suggested shift
+  if (shift.kind === 'ai') {
+    return (
+      <div className="flex-1 h-full border-l border-[#e5e5e5] p-1 min-w-0">
+        <div className="h-full rounded-[10px] px-2 py-1.5 flex flex-col justify-center gap-0.5 border border-dashed border-[#735cf6] bg-[#f5f3ff] overflow-hidden relative">
+          <div className="absolute top-1 right-1">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M5 1L5.8 3.8H8.5L6.3 5.4L7.2 8L5 6.5L2.8 8L3.7 5.4L1.5 3.8H4.2L5 1Z" fill="#735cf6"/>
+            </svg>
+          </div>
+          <span className="text-[12px] leading-4 font-medium truncate text-[#5b21b6]">{shift.role}</span>
+          <span className="text-[11px] leading-4 truncate text-[#6d28d9]">{shift.time}</span>
+        </div>
+      </div>
+    )
   }
   if (shift.kind === 'unavailable') {
     return (
@@ -660,12 +683,45 @@ function AIPanel({ phase, onCreateSchedule, onClose }: {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+// AI-suggested shifts injected after creation: [deptIdx][employeeIdx][dayIdx]
+const AI_FILL: Record<string, Record<number, Shift[]>> = {
+  'Management': {
+    1: [AI_M, AI_M, E, E, AI_M, E, E],    // Alana 0h/20h gets Mon,Tue,Fri suggestions
+  },
+  'Front of House': {
+    2: [AI_F, E, E, E, E, AI_F, E],        // Alana (row3) gets Mon,Sat
+    4: [AI_F, AI_F, E, E, E, E, AI_F],     // Alana (row5) gets Mon,Tue,Sun
+  },
+  'Back of House': {
+    1: [E, E, AI_B, AI_B, AI_B, AI_B, E],  // Alana gets Wed-Sat
+  },
+}
+
 export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) => void }) {
   const [viewMode, setViewMode] = useState<ViewMode>('week')
   const [aiPhase, setAiPhase] = useState<AIPhase>('idle')
   const [aiVisible, setAiVisible] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selectedShift, setSelectedShift] = useState<ShiftModalData | null>(null)
+  const [published, setPublished] = useState(false)
+
+  // Merge AI suggestions into the dept data once schedule is done
+  const depts = DEPTS.map(dept => {
+    if (aiPhase !== 'done') return dept
+    const fills = AI_FILL[dept.name]
+    if (!fills) return dept
+    return {
+      ...dept,
+      employees: dept.employees.map((emp, ei) => {
+        const suggested = fills[ei]
+        if (!suggested) return emp
+        return {
+          ...emp,
+          shifts: emp.shifts.map((s, si) => (s.kind === 'empty' && suggested[si]?.kind === 'ai') ? suggested[si] : s),
+        }
+      }),
+    }
+  })
 
   const handleCreateSchedule = () => {
     if (aiPhase !== 'idle') return
@@ -673,6 +729,11 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
     setAiPhase('creating')
     setTimeout(() => setAiPhase('building'), 1800)
     setTimeout(() => setAiPhase('done'), 4200)
+  }
+
+  const handlePublish = () => {
+    setPublished(true)
+    setTimeout(() => setPublished(false), 4000)
   }
 
   const toggleDept = (name: string) => {
@@ -755,8 +816,11 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
               <IconCalendarAI />
               {isIdle ? 'Create Schedule' : aiPhase === 'creating' ? 'Creating…' : aiPhase === 'building' ? 'Building…' : 'Done ✓'}
             </button>
-            <button className="flex items-center gap-1.5 h-8 px-3 border border-[#e5e5e5] rounded-lg bg-white text-[14px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)]">
-              Publish <ChevronDown size={14} color="#a3a3a3" />
+            <button
+              onClick={handlePublish}
+              className={`flex items-center gap-1.5 h-8 px-3 border rounded-lg text-[14px] shadow-[0_1px_1px_rgba(47,62,77,0.04)] transition-all ${aiPhase === 'done' ? 'border-[#735cf6] bg-[#f5f3ff] text-[#735cf6] hover:bg-[#ede9fe] font-medium' : 'border-[#e5e5e5] bg-white text-[#262626] hover:bg-[#fafafa]'}`}
+            >
+              Publish {aiPhase === 'done' && '✓'} <ChevronDown size={14} color={aiPhase === 'done' ? '#735cf6' : '#a3a3a3'} />
             </button>
           </div>
         </div>
@@ -788,8 +852,29 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
             ))}
           </div>
 
+          {/* Publish success banner */}
+          {published && (
+            <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-2.5 bg-[#f0fdf5] border-b border-[#4ade82] text-[14px] text-[#16a34a]">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" fill="#16a34a"/>
+                <path d="M5 8l2.5 2.5 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Schedule published successfully! Your team has been notified.
+            </div>
+          )}
+
+          {/* AI-suggested shifts legend */}
+          {aiPhase === 'done' && (
+            <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-2 bg-[#f5f3ff] border-b border-[#c4b5fd] text-[13px] text-[#5b21b6]">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1L7 4H10L7.5 6L8.5 9L6 7.5L3.5 9L4.5 6L2 4H5L6 1Z" fill="#735cf6"/>
+              </svg>
+              AI-suggested shifts shown with ✦ — review and adjust before publishing
+            </div>
+          )}
+
           {/* Dept sections */}
-          {DEPTS.map(dept => (
+          {depts.map(dept => (
             <DeptSection
               key={dept.name}
               dept={dept}

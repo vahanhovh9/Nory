@@ -19,8 +19,11 @@ export type Page =
   | 'schedule'
   | 'purchases'
 
+export type Period = 'Today' | 'This week' | 'This month' | 'This quarter' | 'This year'
+
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('inventory')
+  const [currentPage, setCurrentPage] = useState<Page>('sales')
+  const [period, setPeriod] = useState<Period>('This week')
   const [isAskNoryOpen, setIsAskNoryOpen] = useState(false)
 
   return (
@@ -32,12 +35,12 @@ export default function App() {
         <SchedulePage onNavigate={setCurrentPage} />
       ) : (
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <TopBar page={currentPage} onAskNory={() => setIsAskNoryOpen(true)} />
+          <TopBar page={currentPage} period={period} onPeriodChange={setPeriod} onAskNory={() => setIsAskNoryOpen(true)} />
 
-          {currentPage === 'sales'            && <SalesPage />}
+          {currentPage === 'sales'            && <SalesPage period={period} />}
           {currentPage === 'customer-reviews' && <CustomerReviewsPage />}
           {currentPage === 'purchases'  && <PurchasesPage />}
-          {currentPage === 'inventory'  && <InventoryPage />}
+          {currentPage === 'inventory'  && <InventoryPage period={period} />}
           {(currentPage === 'overview' ||
             currentPage === 'labour'   ||
             currentPage === 'pl'       ||

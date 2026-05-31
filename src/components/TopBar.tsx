@@ -1,5 +1,6 @@
-import type { Page } from '../App'
-import { ChevronLeft, ChevronRight, ChevronDown, CalendarIcon, CaretUpDown, NorySparkle, DotsIcon } from './icons'
+import type { Page, Period } from '../App'
+import { ChevronLeft, ChevronRight, ChevronDown, NorySparkle, DotsIcon } from './icons'
+import PeriodPicker from './PeriodPicker'
 
 interface BreadcrumbEntry {
   parent: string
@@ -21,15 +22,17 @@ const breadcrumbs: Record<Page, BreadcrumbEntry> = {
   'purchases':        { parent: 'Purchases',  child: 'Place orders',      childHasDropdown: false },
 }
 
-// Pages that don't need the date-range picker or Ask Nory button
+// Pages with a simple TopBar (no date picker / Ask Nory)
 const SIMPLE_PAGES: Page[] = ['purchases']
 
 interface TopBarProps {
   page: Page
+  period: Period
+  onPeriodChange: (p: Period) => void
   onAskNory: () => void
 }
 
-export default function TopBar({ page, onAskNory }: TopBarProps) {
+export default function TopBar({ page, period, onPeriodChange, onAskNory }: TopBarProps) {
   const { parent, child, childHasDropdown, grandchild, grandchildHasDropdown } = breadcrumbs[page] ?? breadcrumbs['overview']
   const isSimple = SIMPLE_PAGES.includes(page)
 
@@ -59,7 +62,7 @@ export default function TopBar({ page, onAskNory }: TopBarProps) {
           )}
         </div>
 
-        {/* Date range picker — hidden for simple pages */}
+        {/* Date picker — hidden for simple pages */}
         {!isSimple && (
           <>
             <div className="w-px h-6 bg-[#e5e5e5] shrink-0" />
@@ -67,30 +70,19 @@ export default function TopBar({ page, onAskNory }: TopBarProps) {
               <button className="flex items-center justify-center w-8 h-8 border border-[#e5e5e5] rounded-l-lg bg-white hover:bg-[#fafafa] shadow-[0_1px_2px_rgba(47,62,77,0.04)]">
                 <ChevronLeft size={14} color="#525252" />
               </button>
-              <div className="flex items-center gap-2 px-3 h-8 bg-white border-t border-b border-[#e5e5e5]">
-                <CalendarIcon size={14} color="#525252" />
-                <span className="text-[14px] text-[#262626] tracking-[-0.15px]">This week</span>
-                <CaretUpDown size={14} color="#a3a3a3" />
-              </div>
+              <PeriodPicker value={period} onChange={onPeriodChange} />
               <button className="flex items-center justify-center w-8 h-8 border border-[#e5e5e5] rounded-r-lg bg-white hover:bg-[#fafafa] shadow-[0_1px_2px_rgba(47,62,77,0.04)]">
                 <ChevronRight size={14} color="#525252" />
               </button>
-            </div>
-            <div className="flex items-center gap-2 px-3 h-8 bg-white border border-[#d4d4d4] rounded-lg cursor-pointer hover:bg-[#fafafa]">
-              <span className="text-[14px] text-[#262626] tracking-[-0.15px]">This week</span>
-              <CaretUpDown size={14} color="#a3a3a3" />
             </div>
           </>
         )}
       </div>
 
-      {/* Right — Ask Nory hidden for simple pages */}
-      {!isSimple && (
+      {/* Right */}
+      {!isSimple ? (
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={onAskNory}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#e5e5e5] rounded-lg text-[14px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)] transition-colors"
-          >
+          <button onClick={onAskNory} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#e5e5e5] rounded-lg text-[14px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)] transition-colors">
             <NorySparkle size={16} color="#735cf6" />
             Ask Nory
           </button>
@@ -98,8 +90,7 @@ export default function TopBar({ page, onAskNory }: TopBarProps) {
             <DotsIcon size={16} color="#525252" />
           </button>
         </div>
-      )}
-      {isSimple && (
+      ) : (
         <button className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f5f5] shrink-0">
           <DotsIcon size={16} color="#525252" />
         </button>

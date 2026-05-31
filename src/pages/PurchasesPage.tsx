@@ -18,12 +18,15 @@ interface OrderItem {
   unitPrice: number
 }
 
+type SendState = 'idle' | 'sending' | 'sent'
+
 interface SupplierOrder {
   id: string
   supplier: string
   delivery: string
   expanded: boolean
   sent: boolean
+  sendState: SendState
   items?: OrderItem[]
 }
 
@@ -55,6 +58,7 @@ const INITIAL_GROUPS: OrderGroup[] = [
         delivery: 'Delivery: Wed 21 September',
         expanded: true,
         sent: false,
+        sendState: 'idle' as SendState,
         items: [
           { id: 'beef',    name: 'Beef brisket',   description: "You'll use 15kg between Wednesday and Saturday",  unit: '1 kg',  days: WTFS, quantity: 15,  unitPrice: 28.167 },
           { id: 'chicken', name: 'Chicken breast',  description: "You'll use 950ea between Wednesday and Saturday", unit: '50 ea', days: WTFS, quantity: 950, unitPrice: 0.3494 },
@@ -67,8 +71,8 @@ const INITIAL_GROUPS: OrderGroup[] = [
     title: 'Place these orders on Thursday before 12:00',
     tags: ['Category', 'Category'],
     orders: [
-      { id: 'sysco-thu',     supplier: 'Sysco',     delivery: 'Delivery: Wed 21 September', expanded: false, sent: false },
-      { id: 'freshways',     supplier: 'Freshways', delivery: 'Delivery: Wed 21 September', expanded: false, sent: false },
+      { id: 'sysco-thu',     supplier: 'Sysco',     delivery: 'Delivery: Wed 21 September', expanded: false, sent: false, sendState: 'idle' as SendState },
+      { id: 'freshways',     supplier: 'Freshways', delivery: 'Delivery: Wed 21 September', expanded: false, sent: false, sendState: 'idle' as SendState },
     ],
   },
   {
@@ -76,8 +80,8 @@ const INITIAL_GROUPS: OrderGroup[] = [
     title: 'Suppliers you order from every week',
     tags: ['Category', 'Category'],
     orders: [
-      { id: 'sysco-wk1', supplier: 'Sysco', delivery: 'Delivery: Wed 21 September', expanded: false, sent: false },
-      { id: 'sysco-wk2', supplier: 'Sysco', delivery: 'Delivery: Wed 21 September', expanded: false, sent: false },
+      { id: 'sysco-wk1', supplier: 'Sysco', delivery: 'Delivery: Wed 21 September', expanded: false, sent: false, sendState: 'idle' as SendState },
+      { id: 'sysco-wk2', supplier: 'Sysco', delivery: 'Delivery: Wed 21 September', expanded: false, sent: false, sendState: 'idle' as SendState },
     ],
   },
 ]
@@ -168,7 +172,8 @@ function ExpandedOrderCard({
   onSend: () => void
   onQtyChange: (itemId: string, qty: number) => void
   onItemClick: (itemId: string) => void
-}) {
+})
+ {
   const items = order.items ?? []
   const { subtotal, vat, total } = totalForOrder(items)
 
@@ -262,17 +267,32 @@ function ExpandedOrderCard({
         ))}
 
         {/* Footer: ... + Send order */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-[#e5e5e5]">
+        <div className={`flex items-center justify-between px-3 py-3 border-b border-[#e5e5e5] transition-colors ${order.sendState === 'sent' ? 'bg-[#f0fdf5]' : ''}`}>
           <button className="w-8 h-8 border border-[#e5e5e5] rounded-lg flex items-center justify-center bg-white hover:bg-[#fafafa] shadow-[0_1px_2px_rgba(47,62,77,0.04)]">
             <DotsIcon size={14} color="#525252" />
           </button>
-          <button
-            onClick={onSend}
-            className="flex items-center gap-2 px-3 py-2 border border-[#e5e5e5] rounded-lg bg-white text-[14px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)] transition-colors"
-          >
-            <CartIcon color="#262626" />
-            Send order
-          </button>
+          {order.sendState === 'idle' && (
+            <button onClick={onSend} className="flex items-center gap-2 px-3 py-2 border border-[#e5e5e5] rounded-lg bg-white text-[14px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)] transition-colors">
+              <CartIcon color="#262626" />Send order
+            </button>
+          )}
+          {order.sendState === 'sending' && (
+            <button disabled className="flex items-center gap-2 px-3 py-2 border border-[#e5e5e5] rounded-lg bg-white text-[14px] text-[#525252] opacity-70 cursor-not-allowed">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="animate-spin">
+                <path d="M7 1a6 6 0 1 1-5.66 4" stroke="#735cf6" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              Sending…
+            </button>
+          )}
+          {order.sendState === 'sent' && (
+            <button disabled className="flex items-center gap-2 px-3 py-2 border border-[#4ade82] rounded-lg bg-[#f0fdf5] text-[14px] text-[#16a34a] cursor-default">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="6" fill="#22c55e"/>
+                <path d="M4 7l2.5 2.5 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Order sent!
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -388,12 +408,28 @@ export default function PurchasesPage() {
   }
 
   const sendOrder = (groupId: string, orderId: string) => {
+    // Sending state
     setGroups(prev => prev.map(g =>
       g.id !== groupId ? g : {
-        ...g,
-        orders: g.orders.map(o => o.id !== orderId ? o : { ...o, sent: true }),
+        ...g, orders: g.orders.map(o => o.id !== orderId ? o : { ...o, sendState: 'sending' as SendState }),
       },
     ))
+    // Sent state after 700ms
+    setTimeout(() => {
+      setGroups(prev => prev.map(g =>
+        g.id !== groupId ? g : {
+          ...g, orders: g.orders.map(o => o.id !== orderId ? o : { ...o, sendState: 'sent' as SendState }),
+        },
+      ))
+    }, 700)
+    // Remove after 1600ms total
+    setTimeout(() => {
+      setGroups(prev => prev.map(g =>
+        g.id !== groupId ? g : {
+          ...g, orders: g.orders.map(o => o.id !== orderId ? o : { ...o, sent: true }),
+        },
+      ))
+    }, 1600)
   }
 
   const sendAll = () => {

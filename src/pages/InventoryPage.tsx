@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import type { Period } from '../App'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, Tooltip, ComposedChart, Scatter,
@@ -9,8 +10,66 @@ import { ArrowUpRight, ArrowDownRight, ArrowDownLeft, ArrowRight, DotsIcon, Chev
 
 type VType = 'positive' | 'warning' | 'negative' | 'neutral'
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ─── Multi-period GP data ─────────────────────────────────────────────────────
 
+interface GPRow { day: string; actual: number; theoretical: number; stockCount: boolean }
+
+const GP_DATA_MAP: Record<Period, GPRow[]> = {
+  'Today': [
+    { day: '9am',  actual: 72.1, theoretical: 74.8, stockCount: true  },
+    { day: '11am', actual: 73.4, theoretical: 75.9, stockCount: false },
+    { day: '1pm',  actual: 74.8, theoretical: 76.2, stockCount: true  },
+    { day: '3pm',  actual: 73.9, theoretical: 75.8, stockCount: false },
+    { day: '5pm',  actual: 72.8, theoretical: 75.1, stockCount: true  },
+    { day: '7pm',  actual: 74.2, theoretical: 76.4, stockCount: false },
+    { day: '9pm',  actual: 75.1, theoretical: 77.2, stockCount: true  },
+  ],
+  'This week': [
+    { day: 'Monday, 27',   actual: 73.5, theoretical: 75.8, stockCount: true  },
+    { day: 'Tuesday 28',   actual: 73.2, theoretical: 76.8, stockCount: false },
+    { day: 'Wednesday 29', actual: 73.8, theoretical: 77.2, stockCount: true  },
+    { day: 'Thursday, 30', actual: 73.6, theoretical: 77.5, stockCount: false },
+    { day: 'Friday, 31',   actual: 73.1, theoretical: 77.8, stockCount: true  },
+    { day: 'Saturday, 01', actual: 74.0, theoretical: 76.5, stockCount: false },
+    { day: 'Sunday, 02',   actual: 74.2, theoretical: 77.9, stockCount: true  },
+  ],
+  'This month': [
+    { day: 'Week 1', actual: 73.1, theoretical: 76.2, stockCount: true  },
+    { day: 'Week 2', actual: 74.2, theoretical: 77.1, stockCount: false },
+    { day: 'Week 3', actual: 73.6, theoretical: 76.8, stockCount: true  },
+    { day: 'Week 4', actual: 74.8, theoretical: 77.5, stockCount: false },
+  ],
+  'This quarter': [
+    { day: 'January',  actual: 73.4, theoretical: 76.5, stockCount: true  },
+    { day: 'February', actual: 74.1, theoretical: 77.2, stockCount: false },
+    { day: 'March',    actual: 74.5, theoretical: 77.8, stockCount: true  },
+  ],
+  'This year': [
+    { day: 'Jan', actual: 73.1, theoretical: 75.8, stockCount: false },
+    { day: 'Feb', actual: 73.8, theoretical: 76.4, stockCount: true  },
+    { day: 'Mar', actual: 74.2, theoretical: 77.1, stockCount: false },
+    { day: 'Apr', actual: 74.0, theoretical: 76.8, stockCount: true  },
+    { day: 'May', actual: 74.5, theoretical: 77.2, stockCount: false },
+    { day: 'Jun', actual: 73.9, theoretical: 76.9, stockCount: true  },
+    { day: 'Jul', actual: 73.5, theoretical: 76.2, stockCount: false },
+    { day: 'Aug', actual: 74.1, theoretical: 76.8, stockCount: true  },
+    { day: 'Sep', actual: 74.6, theoretical: 77.4, stockCount: false },
+    { day: 'Oct', actual: 74.8, theoretical: 77.8, stockCount: true  },
+    { day: 'Nov', actual: 75.1, theoretical: 78.2, stockCount: false },
+    { day: 'Dec', actual: 74.9, theoretical: 78.0, stockCount: true  },
+  ],
+}
+
+interface InvKPI { sales: string; theGP: string; actGP: string; theChip: string; actChip: string; waste: string; wasteChip: string }
+const INV_KPIS: Record<Period, InvKPI> = {
+  'Today':        { sales: '€14,420',    theGP: '75.8%',  actGP: '74.2%',  theChip: '€980',     actChip: '4.8%',  waste: '-0.95%',  wasteChip: '0.31%' },
+  'This week':    { sales: '€97,474.19', theGP: '76.14%', actGP: '74.50%', theChip: '€4,953',   actChip: '5.61%', waste: '-1.33%',  wasteChip: '0.46%' },
+  'This month':   { sales: '€435,220',   theGP: '76.8%',  actGP: '75.1%',  theChip: '€21,000',  actChip: '4.2%',  waste: '-1.12%',  wasteChip: '0.28%' },
+  'This quarter': { sales: '€1.28M',     theGP: '77.2%',  actGP: '75.6%',  theChip: '€62,000',  actChip: '3.9%',  waste: '-1.05%',  wasteChip: '0.22%' },
+  'This year':    { sales: '€4.92M',     theGP: '76.5%',  actGP: '74.8%',  theChip: '€240,000', actChip: '4.5%',  waste: '-1.28%',  wasteChip: '0.35%' },
+}
+
+// Legacy used internally
 const GP_DATA = [
   { day: 'Monday, 27',   actual: 73.5, theoretical: 75.8, stockCount: true  },
   { day: 'Tuesday 28',   actual: 73.2, theoretical: 76.8, stockCount: false },
@@ -131,7 +190,7 @@ const GPTooltip = ({ active, payload, label }: { active?: boolean; payload?: Arr
   )
 }
 
-function GPChart() {
+function GPChart({ data }: { data: typeof GP_DATA }) {
   return (
     <div className="bg-white border border-[#e5e5e5] rounded-xl overflow-hidden">
       {/* Header */}
@@ -146,7 +205,7 @@ function GPChart() {
 
       <div className="p-4" style={{ height: 340 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={GP_DATA} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="0" stroke="#e5e5e5" vertical={false} />
             <XAxis
               dataKey="day"
@@ -450,9 +509,12 @@ function HeatmapPanel() {
 type MetricMode = 'COGS' | 'GP'
 type DisplayMode = 'amount' | 'pct'
 
-export default function InventoryPage() {
+export default function InventoryPage({ period = 'This week' }: { period?: Period }) {
   const [metric, setMetric]   = useState<MetricMode>('GP')
   const [display, setDisplay] = useState<DisplayMode>('amount')
+
+  const kpi = INV_KPIS[period]
+  const gpChartData = GP_DATA_MAP[period]
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -502,14 +564,14 @@ export default function InventoryPage() {
 
         {/* KPI Row */}
         <div className="flex gap-4">
-          <KPICard label="Actual sales"    value="€97,474.19" variance={null} period={null} />
-          <KPICard label={`Theoretical ${metric}`} value="76.14%"     variance={{ val: '€4,953', t: 'positive' }} period="vs fcast" />
-          <KPICard label={`Actual ${metric}`}       value="74.50%"     variance={{ val: '5.61%',  t: 'positive' }} period="vs planned" />
-          <KPICard label="Waste"           value="-1.33%"     variance={{ val: '0.46%',  t: 'positive' }} period="vs last period" />
+          <KPICard label="Actual sales"             value={kpi.sales}   variance={null} period={null} />
+          <KPICard label={`Theoretical ${metric}`}  value={kpi.theGP}   variance={{ val: kpi.theChip, t: 'positive' }} period="vs fcast" />
+          <KPICard label={`Actual ${metric}`}        value={kpi.actGP}   variance={{ val: kpi.actChip, t: 'positive' }} period="vs planned" />
+          <KPICard label="Waste"                    value={kpi.waste}   variance={{ val: kpi.wasteChip, t: 'positive' }} period="vs last period" />
         </div>
 
         {/* GP over time chart */}
-        <GPChart />
+        <GPChart data={gpChartData} />
 
         {/* Menu items table */}
         <MenuItemsTable />
