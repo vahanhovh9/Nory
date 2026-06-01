@@ -20,11 +20,14 @@ export type Page =
   | 'purchases'
 
 export type Period = 'Today' | 'This week' | 'This month' | 'This quarter' | 'This year'
+// State of the schedule Nory builds from the chat (shown on the Schedule page)
+export type NorySchedule = 'none' | 'created' | 'pending' | 'approved'
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('sales')
   const [period, setPeriod] = useState<Period>('This week')
   const [isAskNoryOpen, setIsAskNoryOpen] = useState(false)
+  const [norySchedule, setNorySchedule] = useState<NorySchedule>('none')
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -32,7 +35,11 @@ export default function App() {
 
       {/* Schedule has its own full layout (custom top bar + built-in AI panel) */}
       {currentPage === 'schedule' ? (
-        <SchedulePage onNavigate={setCurrentPage} />
+        <SchedulePage
+          onNavigate={setCurrentPage}
+          norySchedule={norySchedule}
+          setNorySchedule={setNorySchedule}
+        />
       ) : (
         // Vertical: full-width TopBar on top, chat opens BENEATH it (beside page content)
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -72,6 +79,7 @@ export default function App() {
                 isOpen={isAskNoryOpen}
                 onClose={() => setIsAskNoryOpen(false)}
                 page={currentPage}
+                onScheduleCreated={() => setNorySchedule('created')}
               />
             </div>
 

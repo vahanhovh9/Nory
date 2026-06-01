@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import type { Page } from '../App'
+import type { Page, NorySchedule } from '../App'
 import {
   ChevronLeft, ChevronRight, CaretUpDown, DotsIcon, NorySparkle, XIcon, ChevronUp, ChevronDown, AiIcon,
 } from '../components/icons'
@@ -698,7 +698,11 @@ const AI_FILL: Record<string, Record<number, Shift[]>> = {
   },
 }
 
-export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) => void }) {
+export default function SchedulePage({ onNavigate, norySchedule = 'none', setNorySchedule }: {
+  onNavigate: (page: Page) => void
+  norySchedule?: NorySchedule
+  setNorySchedule?: (s: NorySchedule) => void
+}) {
   const [viewMode, setViewMode] = useState<ViewMode>('week')
   const [aiPhase, setAiPhase] = useState<AIPhase>('idle')
   const [aiVisible, setAiVisible] = useState(false)
@@ -706,10 +710,15 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
   const [selectedShift, setSelectedShift] = useState<ShiftModalData | null>(null)
   const [published, setPublished] = useState(false)
   const [askNoryOpen, setAskNoryOpen] = useState(false)
+  const [approveOpen, setApproveOpen] = useState(false)
 
-  // Merge AI suggestions into the dept data once schedule is done
+  // Show AI shifts when either the page builder finished OR Nory built a schedule from chat.
+  const showAI = aiPhase === 'done' || norySchedule !== 'none'
+  const committed = norySchedule === 'approved'
+
+  // Merge AI suggestions into the dept data
   const depts = DEPTS.map(dept => {
-    if (aiPhase !== 'done') return dept
+    if (!showAI) return dept
     const fills = AI_FILL[dept.name]
     if (!fills) return dept
     return {
@@ -719,7 +728,14 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
         if (!suggested) return emp
         return {
           ...emp,
-          shifts: emp.shifts.map((s, si) => (s.kind === 'empty' && suggested[si]?.kind === 'ai') ? suggested[si] : s),
+          shifts: emp.shifts.map((s, si) => {
+            const fill = suggested[si]
+            if (s.kind === 'empty' && fill?.kind === 'ai') {
+              // Approved → commit the ✦ AI shift to a normal confirmed shift
+              return committed ? { ...fill, kind: 'shift' as const, ai: false } : fill
+            }
+            return s
+          }),
         }
       }),
     }
@@ -881,13 +897,85 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
             </div>
           )}
 
-          {/* AI-suggested shifts legend */}
-          {aiPhase === 'done' && (
+          {/* AI-suggested shifts legend (page's own builder) */}
+          {aiPhase === 'done' && norySchedule === 'none' && (
             <div className="sticky top-0 z-20 flex items-center gap-2 px-4 py-2 bg-[#f5f3ff] border-b border-[#c4b5fd] text-[13px] text-[#5b21b6]">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M6 1L7 4H10L7.5 6L8.5 9L6 7.5L3.5 9L4.5 6L2 4H5L6 1Z" fill="#735cf6"/>
               </svg>
               AI-suggested shifts shown with ✦ — review and adjust before publishing
+            </div>
+          )}
+
+          {/* Nory built this schedule — control bar */}
+          {norySchedule === 'created' && (
+            <div className="sticky top-0 z-30 flex items-center gap-2 px-4 py-2 bg-[#f5f3ff] border-b border-[#c4b5fd]">
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1L7 4H10L7.5 6L8.5 9L6 7.5L3.5 9L4.5 6L2 4H5L6 1Z" fill="#735cf6"/>
+              </svg>
+              <span className="text-[13px] text-[#5b21b6] flex-1">
+                <span className="font-medium">Nory built this schedule</span> — 42 shifts marked ✦. Review, then approve.
+              </span>
+              {/* Approve split button */}
+              <div className="relative">
+                <div className="flex items-center rounded-lg overflow-hidden shadow-[0_1px_1px_rgba(47,62,77,0.04)]">
+                  <button
+                    onClick={() => setNorySchedule?.('approved')}
+                    className="h-8 px-3 bg-[#735cf6] text-white text-[13px] font-medium hover:bg-[#6248e8] transition-colors"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => setApproveOpen(o => !o)}
+                    className="h-8 px-1.5 bg-[#735cf6] border-l border-[#5e49d3] flex items-center hover:bg-[#6248e8] transition-colors"
+                  >
+                    <ChevronDown size={14} color="white" />
+                  </button>
+                </div>
+                {approveOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setApproveOpen(false)} />
+                    <div className="absolute right-0 top-[calc(100%+4px)] z-20 w-48 bg-white border border-[#e5e5e5] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] py-1">
+                      <button
+                        onClick={() => { setApproveOpen(false); setNorySchedule?.('pending') }}
+                        className="w-full text-left px-3 py-2 text-[13px] text-[#262626] hover:bg-[#fafafa]"
+                      >
+                        Submit for approval
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => setNorySchedule?.('none')}
+                className="h-8 px-3 border border-[#e5e5e5] rounded-lg bg-white text-[13px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)]"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+
+          {/* Submitted for approval */}
+          {norySchedule === 'pending' && (
+            <div className="sticky top-0 z-30 flex items-center gap-2 px-4 py-2.5 bg-[#fff7ed] border-b border-[#fed7aa] text-[13px] text-[#9a3412]">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" stroke="#ea580c" strokeWidth="1.3" />
+                <path d="M8 5v3l2 1.5" stroke="#ea580c" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="flex-1"><span className="font-medium">Submitted for approval</span> — waiting on a manager to sign off.</span>
+              <button onClick={() => setNorySchedule?.('created')} className="text-[#ea580c] font-medium hover:underline">Cancel</button>
+            </div>
+          )}
+
+          {/* Approved & published */}
+          {norySchedule === 'approved' && (
+            <div className="sticky top-0 z-30 flex items-center gap-2 px-4 py-2.5 bg-[#f0fdf5] border-b border-[#4ade82] text-[14px] text-[#16a34a]">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" fill="#16a34a"/>
+                <path d="M5 8l2.5 2.5 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span className="flex-1">Schedule approved &amp; published. Your team has been notified.</span>
+              <button onClick={() => setNorySchedule?.('none')} className="text-[#16a34a] font-medium hover:underline">Clear</button>
             </div>
           )}
 
@@ -923,7 +1011,7 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
         className="overflow-hidden transition-all duration-300 ease-out flex-none"
         style={{ width: askNoryOpen ? 400 : 0 }}
       >
-        <AskNoryPanel isOpen={askNoryOpen} onClose={() => setAskNoryOpen(false)} page="schedule" />
+        <AskNoryPanel isOpen={askNoryOpen} onClose={() => setAskNoryOpen(false)} page="schedule" onScheduleCreated={() => setNorySchedule?.('created')} />
       </div>
       </div>{/* end below-top-bar horizontal row */}
 

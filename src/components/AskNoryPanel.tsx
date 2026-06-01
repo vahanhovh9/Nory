@@ -389,9 +389,10 @@ interface AskNoryPanelProps {
   isOpen: boolean
   onClose: () => void
   page?: Page
+  onScheduleCreated?: () => void
 }
 
-export default function AskNoryPanel({ isOpen, onClose, page }: AskNoryPanelProps) {
+export default function AskNoryPanel({ isOpen, onClose, page, onScheduleCreated }: AskNoryPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
@@ -502,9 +503,12 @@ export default function AskNoryPanel({ isOpen, onClose, page }: AskNoryPanelProp
         options: ['Leave Vahan off Thursday', 'Keep both anyway', 'Swap Richard instead'],
       }))
     } else if (stage === 'conflict') {
-      // Build the schedule, then deliver the done message
+      // Build the schedule, populate the grid, then deliver the done message
       setStage('review')
-      runSteps(FLOW_BUILD_STEPS, () => pushAI(doneMessage()))
+      runSteps(FLOW_BUILD_STEPS, () => {
+        onScheduleCreated?.()
+        pushAI(doneMessage())
+      })
     } else if (stage === 'review') {
       // Follow-up tweaks after the schedule is built
       if (/vahan/i.test(answer)) {
