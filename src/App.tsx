@@ -71,6 +71,7 @@ export default function App() {
               <AskNoryPanel
                 isOpen={isAskNoryOpen}
                 onClose={() => setIsAskNoryOpen(false)}
+                page={currentPage}
               />
             </div>
 

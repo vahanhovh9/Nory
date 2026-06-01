@@ -923,7 +923,7 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
         className="overflow-hidden transition-all duration-300 ease-out flex-none"
         style={{ width: askNoryOpen ? 400 : 0 }}
       >
-        <AskNoryPanel isOpen={askNoryOpen} onClose={() => setAskNoryOpen(false)} />
+        <AskNoryPanel isOpen={askNoryOpen} onClose={() => setAskNoryOpen(false)} page="schedule" />
       </div>
       </div>{/* end below-top-bar horizontal row */}
 

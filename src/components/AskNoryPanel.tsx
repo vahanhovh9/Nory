@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import type { Page } from '../App'
 import { AiIcon, XIcon, ChevronUp } from './icons'
 
 // ─── Think (model logic) modes ─────────────────────────────────────────────────
@@ -130,9 +131,12 @@ interface Message {
   role: 'ai' | 'user'
   content: string
   keyInsight?: string
+  ruleNote?: string        // a "spicy" rule the agent surfaces
+  options?: string[]       // clickable answer choices (A/B/C)
   sources?: Source[]
   steps?: string[]
   durationMs?: number
+  addMore?: string         // "add more sources" suggestion sentence
 }
 
 // Sources Nory consults (small circles under an answer)
@@ -155,6 +159,28 @@ const WASTE_INSIGHT =
   "Waste is **1.33% of sales** (~**£1,290**) this week — **0.46pp better** than last period."
 const WASTE_BODY =
   "Most of it is **over-portioning** in Back of House (~46%) and **fresh produce spoilage** (~31%).\n\nQuickest win: tighten par levels on chicken and herbs — roughly **£180/week** back."
+
+// ── Create-schedule agent flow ─────────────────────────────────────────────────
+const SCHEDULE_SOURCES: Source[] = [
+  { short: 'FC', name: 'Sales forecast',     color: '#735cf6' },
+  { short: 'AV', name: 'Team availability',  color: '#2563eb' },
+  { short: 'CT', name: 'Contracts & hours',  color: '#16a34c' },
+  { short: 'RL', name: 'Scheduling rules',   color: '#ea580c' },
+]
+const FLOW_PREBUILD_STEPS = [
+  "Pulling next week's sales forecast",
+  'Checking team availability & contracts',
+  'Reading your scheduling rules',
+]
+const FLOW_BUILD_STEPS = [
+  'Matching shifts to the forecast',
+  'Balancing labour cost',
+  'Finalising the rota',
+]
+const VAHAN_RULE = "Vahan and Richard aren't getting along — don't put them on the same shift."
+
+// Detects "create a schedule / add a shift / build the rota"
+const SCHEDULE_INTENT = /\b(create|build|make|add|set ?up|do|draft|plan)\b.*\b(schedule|shift|shifts|rota)\b|\bschedule\b/i
 
 // 3 key actions Nory can take (welcome state)
 const QUICK_ACTIONS: { label: string; prompt: string; icon: React.ReactNode }[] = [
@@ -226,7 +252,13 @@ const Check = () => (
   </svg>
 )
 
-function AIMessage({ msg, onOpenSources }: { msg: Message; onOpenSources: () => void }) {
+function AIMessage({ msg, onOpenSources, isLast, onOption, busy }: {
+  msg: Message
+  onOpenSources: () => void
+  isLast: boolean
+  onOption: (opt: string) => void
+  busy: boolean
+}) {
   const [open, setOpen] = useState(false)
   const hasSources = !!msg.sources?.length
 
@@ -278,6 +310,37 @@ function AIMessage({ msg, onOpenSources }: { msg: Message; onOpenSources: () => 
           </div>
         )}
 
+        {/* Rule the agent surfaced */}
+        {msg.ruleNote && (
+          <div className="flex items-start gap-2 px-3 py-2.5 bg-[#fff7ed] border border-[#fed7aa] rounded-xl">
+            <span className="mt-0.5 shrink-0">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 2v12M3 3h8l-1.5 2.5L11 8H3" stroke="#ea580c" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#ea580c] mb-0.5">From your rules</p>
+              <p className="text-[13px] text-[#9a3412] leading-4">{msg.ruleNote}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Answer choices (A/B/C) — only on the latest message, when idle */}
+        {msg.options && isLast && !busy && (
+          <div className="flex flex-col gap-1.5">
+            {msg.options.map(opt => (
+              <button
+                key={opt}
+                onClick={() => onOption(opt)}
+                className="text-left px-3 py-2 bg-white border border-[#e5e5e5] rounded-lg text-[13px] text-[#262626] hover:bg-[#f5f3ff] hover:border-[#c4b5fd] hover:text-[#735cf6] transition-colors"
+              >
+                {opt}
+              </button>
+            ))}
+            <p className="text-[11px] text-[#a3a3a3] mt-0.5">or type your answer below</p>
+          </div>
+        )}
+
         {/* Source circles */}
         {hasSources && (
           <button onClick={onOpenSources} className="flex items-center gap-2 self-start group">
@@ -298,11 +361,11 @@ function AIMessage({ msg, onOpenSources }: { msg: Message; onOpenSources: () => 
         )}
 
         {/* Add more sources banner */}
-        {hasSources && (
+        {hasSources && msg.addMore && (
           <div className="flex items-start gap-2 px-3 py-2 bg-[#faf9ff] rounded-xl">
             <span className="mt-0.5"><AiIcon size={13} color="#735cf6" /></span>
             <p className="flex-1 text-[12px] text-[#525252] leading-4">
-              Nory used {msg.sources!.length} sources. Adding <span className="font-medium text-[#262626]">Sysco invoices</span> would improve waste accuracy ~12%.{' '}
+              Nory used {msg.sources!.length} sources. {msg.addMore}{' '}
               <button onClick={onOpenSources} className="text-[#735cf6] font-medium hover:underline">Add</button>
             </p>
           </div>
@@ -325,9 +388,10 @@ function UserMessage({ content }: { content: string }) {
 interface AskNoryPanelProps {
   isOpen: boolean
   onClose: () => void
+  page?: Page
 }
 
-export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
+export default function AskNoryPanel({ isOpen, onClose, page }: AskNoryPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'ai',
@@ -336,15 +400,41 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
     },
   ])
   const [inputValue, setInputValue] = useState('')
-  // run.stepIndex: -1 = "Thinking…", 0..n-1 = currently checking that step
-  const [run, setRun] = useState<{ stepIndex: number } | null>(null)
+  // run.stepIndex: -1 = "Thinking…", 0..n-1 = currently running that step
+  const [run, setRun] = useState<{ steps: string[]; stepIndex: number } | null>(null)
   const [thinkMode, setThinkMode] = useState<ThinkMode>('normal')
   const [thinkOpen, setThinkOpen] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [listening, setListening] = useState(false)
+  // Agent flow stage: null = free Q&A; otherwise a create-schedule stage
+  const [, setFlowStage] = useState<string | null>(null)
+  const flowRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const busy = run !== null
+
+  const stepMs = () => (thinkMode === 'quick' ? 450 : thinkMode === 'long' ? 950 : 650)
+  const setStage = (s: string | null) => { flowRef.current = s; setFlowStage(s) }
+  const pushUser = (content: string) => setMessages(prev => [...prev, { role: 'user', content }])
+  const pushAI = (m: Partial<Message>) => setMessages(prev => [...prev, { role: 'ai', content: '', ...m }])
+
+  // Brief "Thinking…" beat before a reply (also blocks input during the gap)
+  const think = (ms: number, done: () => void) => {
+    setRun({ steps: [], stepIndex: -1 })
+    setTimeout(() => { setRun(null); done() }, ms)
+  }
+  // Reveal steps one-by-one, then run `done`
+  const runSteps = (steps: string[], done: () => void) => {
+    const ms = stepMs()
+    setRun({ steps, stepIndex: -1 })
+    let i = -1
+    const tick = () => {
+      i++
+      if (i < steps.length) { setRun({ steps, stepIndex: i }); setTimeout(tick, ms) }
+      else { setRun(null); done() }
+    }
+    setTimeout(tick, 700)
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -363,43 +453,109 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
   const thinkLabel = THINK_MODES.find(m => m.id === thinkMode)!.label
   const hasText = inputValue.trim().length > 0
 
-  const sendMessage = (text: string) => {
-    if (!text.trim() || busy) return
+  // ── Create-schedule agentic flow ─────────────────────────────────────────────
+  const doneMessage = (): Partial<Message> => {
+    const onSchedule = page === 'schedule'
+    return {
+      keyInsight: "Next week's schedule is ready — **42 shifts**, covers the **£20,241** forecast at **27% labour cost**.",
+      content: onSchedule
+        ? "I left **Vahan** off Thursday close to respect your rule. The new shifts are on the grid marked ✦ — **review & approve** them there.\n\n**If you need changes, just tell me.**"
+        : "I left **Vahan** off Thursday close to respect your rule.\n\nHead to **Schedule & Workforce** to review & approve the new shifts. **If you need changes, just tell me.**",
+      sources: SCHEDULE_SOURCES,
+      steps: [...FLOW_PREBUILD_STEPS, ...FLOW_BUILD_STEPS],
+      durationMs: 4600,
+      addMore: 'Connecting Deputy would sharpen availability accuracy.',
+    }
+  }
 
-    setMessages(prev => [...prev, { role: 'user', content: text }])
-    setInputValue('')
+  const startScheduleFlow = (text: string) => {
+    pushUser(text)
+    setStage('week')
+    think(550, () => pushAI({
+      content: "Happy to build that. A couple of quick questions first —\n\n**Which week** should I schedule?",
+      options: ['Next week (Wk 33)', 'The week after', 'A custom range'],
+    }))
+  }
 
-    const started = Date.now()
-    const stepMs = thinkMode === 'quick' ? 450 : thinkMode === 'long' ? 950 : 650
+  const respondInFlow = (answer: string) => {
+    pushUser(answer)
+    const stage = flowRef.current
 
-    // Phase 1: "Thinking…"
-    setRun({ stepIndex: -1 })
-
-    // Phase 2: reveal steps one by one
-    let i = -1
-    const tick = () => {
-      i++
-      if (i < ANSWER_STEPS.length) {
-        setRun({ stepIndex: i })
-        setTimeout(tick, stepMs)
+    if (stage === 'week') {
+      setStage('depts')
+      think(550, () => pushAI({
+        content: 'Got it. **Which departments** should I cover?',
+        options: ['All departments', 'Front of House only', 'Back of House only'],
+      }))
+    } else if (stage === 'depts') {
+      setStage('optimise')
+      think(550, () => pushAI({
+        content: 'And what should I **optimise for**?',
+        options: ['Match the sales forecast', 'Minimise labour cost', 'Maximise coverage'],
+      }))
+    } else if (stage === 'optimise') {
+      // Pre-build, then surface the rule conflict
+      setStage('conflict')
+      runSteps(FLOW_PREBUILD_STEPS, () => pushAI({
+        content: "Before I finalise — one of your rules clashes with this week. **Vahan** and **Richard** would both be on **Thursday close**.\n\nHow should I handle it?",
+        ruleNote: VAHAN_RULE,
+        options: ['Leave Vahan off Thursday', 'Keep both anyway', 'Swap Richard instead'],
+      }))
+    } else if (stage === 'conflict') {
+      // Build the schedule, then deliver the done message
+      setStage('review')
+      runSteps(FLOW_BUILD_STEPS, () => pushAI(doneMessage()))
+    } else if (stage === 'review') {
+      // Follow-up tweaks after the schedule is built
+      if (/vahan/i.test(answer)) {
+        setStage('lily')
+        runSteps(['Re-opening the rota', 'Checking Thursday headcount'], () => pushAI({
+          content: "Bringing Vahan back puts **Thursday close** at 5 — one over your target of 4. Should I move **Lily** off that shift to make room?",
+          options: ['Yes, move Lily off', 'No, keep all 5 (over headcount)'],
+        }))
       } else {
-        // Phase 3: deliver the answer with a highlighted key insight + collapsed steps + sources
-        const isWaste = /waste/i.test(text)
-        setRun(null)
-        setMessages(prev => [...prev, {
-          role: 'ai',
-          keyInsight: isWaste ? WASTE_INSIGHT : undefined,
-          content: isWaste
-            ? WASTE_BODY
-            : (AI_RESPONSES[text] ||
-              "Here's what I found across your data. I'm seeing a few patterns worth a closer look — want me to break any of these down or take an action on it?"),
-          sources: ANSWER_SOURCES,
-          steps: ANSWER_STEPS,
-          durationMs: Date.now() - started,
-        }])
+        think(550, () => pushAI({
+          content: "Sure — I can change the **day**, **role**, **who's on**, or **hours**. Tell me what to tweak and I'll update it.",
+        }))
+      }
+    } else if (stage === 'lily') {
+      setStage('review')
+      if (/yes|move|remove|lily/i.test(answer)) {
+        runSteps(['Moving Lily to Friday', 'Re-checking headcount'], () => pushAI({
+          content: "✅ **All done** — Vahan's back on Thursday close and Lily's now on Friday. Headcount's balanced.\n\nAnything else you'd like to change?",
+        }))
+      } else {
+        runSteps(['Updating the rota'], () => pushAI({
+          content: "Done — Vahan's back on Thursday close. It's **1 over headcount**, so I've flagged it for your approval. Tell me if you'd like to rebalance.",
+        }))
       }
     }
-    setTimeout(tick, 700)
+  }
+
+  // ── Free Q&A (waste etc.) ─────────────────────────────────────────────────────
+  const answerQuestion = (text: string) => {
+    pushUser(text)
+    const started = Date.now()
+    const isWaste = /waste/i.test(text)
+    runSteps(ANSWER_STEPS, () => pushAI({
+      keyInsight: isWaste ? WASTE_INSIGHT : undefined,
+      content: isWaste
+        ? WASTE_BODY
+        : (AI_RESPONSES[text] ||
+          "Here's what I found across your data. I'm seeing a few patterns worth a closer look — want me to break any of these down or take an action on it?"),
+      sources: ANSWER_SOURCES,
+      steps: ANSWER_STEPS,
+      durationMs: Date.now() - started,
+      addMore: 'Adding Sysco invoices would improve waste accuracy ~12%.',
+    }))
+  }
+
+  const sendMessage = (text: string) => {
+    if (!text.trim() || busy) return
+    setInputValue('')
+    if (flowRef.current) { respondInFlow(text); return }          // mid-flow → treat as answer
+    if (SCHEDULE_INTENT.test(text)) { startScheduleFlow(text); return } // start the agent flow
+    answerQuestion(text)                                          // otherwise → Q&A
   }
 
   return (
@@ -429,7 +585,14 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
           // Hide the initial greeting once a conversation has started
           if (i === 0 && messages.length > 1) return null
           return msg.role === 'ai' ? (
-            <AIMessage key={i} msg={msg} onOpenSources={() => setSourcesOpen(true)} />
+            <AIMessage
+              key={i}
+              msg={msg}
+              isLast={i === messages.length - 1}
+              busy={busy}
+              onOption={sendMessage}
+              onOpenSources={() => setSourcesOpen(true)}
+            />
           ) : (
             <UserMessage key={i} content={msg.content} />
           )
@@ -453,7 +616,7 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
                 </div>
               ) : (
                 <ul className="flex flex-col gap-1.5">
-                  {ANSWER_STEPS.slice(0, run.stepIndex + 1).map((s, idx) => {
+                  {run.steps.slice(0, run.stepIndex + 1).map((s, idx) => {
                     const done = idx < run.stepIndex
                     return (
                       <li key={s} className="flex items-center gap-2 text-[13px] text-[#525252]">
