@@ -28,29 +28,53 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
-      <SideNav currentPage={currentPage} onNavigate={setCurrentPage} />
+      <SideNav currentPage={currentPage} onNavigate={(p) => { setCurrentPage(p); setIsAskNoryOpen(false) }} />
 
-      {/* Schedule has its own full layout (custom top bar + AI panel) */}
+      {/* Schedule has its own full layout (custom top bar + built-in AI panel) */}
       {currentPage === 'schedule' ? (
         <SchedulePage onNavigate={setCurrentPage} />
       ) : (
+        // Vertical: full-width TopBar on top, chat opens BENEATH it (beside page content)
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <TopBar page={currentPage} period={period} onPeriodChange={setPeriod} onAskNory={() => setIsAskNoryOpen(true)} />
+          <TopBar
+            page={currentPage}
+            period={period}
+            onPeriodChange={setPeriod}
+            onAskNory={() => setIsAskNoryOpen(o => !o)}
+            askNoryOpen={isAskNoryOpen}
+          />
 
-          {currentPage === 'sales'            && <SalesPage period={period} />}
-          {currentPage === 'customer-reviews' && <CustomerReviewsPage />}
-          {currentPage === 'purchases'  && <PurchasesPage />}
-          {currentPage === 'inventory'  && <InventoryPage period={period} />}
-          {(currentPage === 'overview' ||
-            currentPage === 'labour'   ||
-            currentPage === 'pl'       ||
-            currentPage === 'budget')  && (
-            <div className="flex-1 flex items-center justify-center text-[14px] text-[#a3a3a3]">
-              {currentPage.charAt(0).toUpperCase() + currentPage.slice(1)} page coming soon
+          {/* Below the top bar: page content shrinks as the AI panel slides in beside it */}
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+
+            {/* ── Page content ── */}
+            <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+              {currentPage === 'sales'            && <SalesPage period={period} />}
+              {currentPage === 'customer-reviews' && <CustomerReviewsPage />}
+              {currentPage === 'purchases'        && <PurchasesPage />}
+              {currentPage === 'inventory'        && <InventoryPage period={period} />}
+              {(currentPage === 'overview' ||
+                currentPage === 'labour'   ||
+                currentPage === 'pl'       ||
+                currentPage === 'budget')  && (
+                <div className="flex-1 flex items-center justify-center text-[14px] text-[#a3a3a3]">
+                  {currentPage.charAt(0).toUpperCase() + currentPage.slice(1)} page coming soon
+                </div>
+              )}
             </div>
-          )}
 
-          <AskNoryPanel isOpen={isAskNoryOpen} onClose={() => setIsAskNoryOpen(false)} />
+            {/* ── AI panel — opens under the top bar, beside the page content ── */}
+            <div
+              className="flex-none overflow-hidden transition-all duration-300 ease-out"
+              style={{ width: isAskNoryOpen ? 400 : 0 }}
+            >
+              <AskNoryPanel
+                isOpen={isAskNoryOpen}
+                onClose={() => setIsAskNoryOpen(false)}
+              />
+            </div>
+
+          </div>
         </div>
       )}
     </div>

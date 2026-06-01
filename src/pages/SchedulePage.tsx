@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Page } from '../App'
 import {
-  ChevronLeft, ChevronRight, CaretUpDown, DotsIcon, NorySparkle, XIcon, ChevronUp, ChevronDown,
+  ChevronLeft, ChevronRight, CaretUpDown, DotsIcon, NorySparkle, XIcon, ChevronUp, ChevronDown, AiIcon,
 } from '../components/icons'
+import AskNoryPanel from '../components/AskNoryPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -704,6 +705,7 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [selectedShift, setSelectedShift] = useState<ShiftModalData | null>(null)
   const [published, setPublished] = useState(false)
+  const [askNoryOpen, setAskNoryOpen] = useState(false)
 
   // Merge AI suggestions into the dept data once schedule is done
   const depts = DEPTS.map(dept => {
@@ -743,11 +745,9 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
   const isIdle = aiPhase === 'idle'
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* ── Left: Schedule ── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden border-r border-[#e5e5e5]">
-        {/* Top bar */}
-        <div className="flex items-center gap-3 px-4 h-[52px] border-b border-[#e5e5e5] shrink-0 bg-white">
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* ── Full-width top bar (consistent with other pages — chat opens beneath it) ── */}
+      <div className="flex items-center gap-3 px-4 h-[52px] border-b border-[#e5e5e5] shrink-0 bg-white">
           <button onClick={() => onNavigate('overview')} className="w-8 h-8 border border-[#e5e5e5] rounded-lg flex items-center justify-center bg-white hover:bg-[#fafafa]">
             <ChevronLeft size={14} color="#525252" />
           </button>
@@ -786,10 +786,28 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
             Departments <ChevronDown size={14} color="#a3a3a3" />
           </button>
           <div className="flex-1" />
+          {/* Hey, Nory — prominent AI chat toggle */}
+          <button
+            onClick={() => setAskNoryOpen(o => !o)}
+            aria-pressed={askNoryOpen}
+            className={
+              askNoryOpen
+                ? 'flex items-center gap-2 h-8 px-3.5 rounded-lg text-[14px] font-medium text-[#5b21b6] bg-[#ede9fe] border border-[#735cf6] transition-all'
+                : 'flex items-center gap-2 h-8 px-3.5 rounded-lg text-[14px] font-medium text-white bg-gradient-to-r from-[#735cf6] to-[#9b6cf8] border border-transparent hover:from-[#6248e8] hover:to-[#8a5cf0] transition-all'
+            }
+          >
+            <AiIcon size={16} color={askNoryOpen ? '#5b21b6' : '#ffffff'} />
+            Hey, Nory
+          </button>
           <button className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[#f5f5f5]">
             <DotsIcon size={16} color="#525252" />
           </button>
         </div>
+
+      {/* ── Below the top bar: content shrinks as panels slide in beside it ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* ── Left: projections + calendar ── */}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden border-r border-[#e5e5e5]">
 
         {/* Projections bar */}
         <div className="flex items-center justify-between px-4 h-[52px] border-b border-[#e5e5e5] shrink-0 bg-white">
@@ -811,9 +829,9 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
             <button
               onClick={handleCreateSchedule}
               disabled={!isIdle}
-              className="flex items-center gap-2 h-8 px-3 bg-[#735cf6] rounded-lg text-[14px] text-white hover:bg-[#6248e8] transition-colors disabled:opacity-70 shadow-[0_1px_1px_rgba(47,62,77,0.04)]"
+              className="flex items-center gap-2 h-8 px-3 border border-[#e5e5e5] rounded-lg bg-white text-[14px] text-[#262626] hover:bg-[#fafafa] disabled:opacity-70 transition-colors shadow-[0_1px_1px_rgba(47,62,77,0.04)]"
             >
-              <IconCalendarAI />
+              <IconCalendarAI color="#525252" />
               {isIdle ? 'Create Schedule' : aiPhase === 'creating' ? 'Creating…' : aiPhase === 'building' ? 'Building…' : 'Done ✓'}
             </button>
             <button
@@ -886,7 +904,7 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
         </div>
       </div>
 
-      {/* ── Right: AI panel (slides in after Create Schedule) ── */}
+      {/* ── Right: AI builder panel (slides in after Create Schedule) ── */}
       <div
         className="overflow-hidden transition-all duration-300 ease-out flex-none"
         style={{ width: aiVisible ? 420 : 0, opacity: aiVisible ? 1 : 0 }}
@@ -899,6 +917,15 @@ export default function SchedulePage({ onNavigate }: { onNavigate: (page: Page) 
           />
         )}
       </div>
+
+      {/* ── Far right: Hey, Nory chat assistant ── */}
+      <div
+        className="overflow-hidden transition-all duration-300 ease-out flex-none"
+        style={{ width: askNoryOpen ? 400 : 0 }}
+      >
+        <AskNoryPanel isOpen={askNoryOpen} onClose={() => setAskNoryOpen(false)} />
+      </div>
+      </div>{/* end below-top-bar horizontal row */}
 
       {/* ── Shift edit modal ── */}
       {selectedShift && (

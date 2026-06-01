@@ -1,5 +1,5 @@
 import type { Page, Period } from '../App'
-import { ChevronLeft, ChevronRight, ChevronDown, NorySparkle, DotsIcon } from './icons'
+import { ChevronLeft, ChevronRight, ChevronDown, AiIcon, DotsIcon } from './icons'
 import PeriodPicker from './PeriodPicker'
 
 interface BreadcrumbEntry {
@@ -30,9 +30,10 @@ interface TopBarProps {
   period: Period
   onPeriodChange: (p: Period) => void
   onAskNory: () => void
+  askNoryOpen: boolean
 }
 
-export default function TopBar({ page, period, onPeriodChange, onAskNory }: TopBarProps) {
+export default function TopBar({ page, period, onPeriodChange, onAskNory, askNoryOpen }: TopBarProps) {
   const { parent, child, childHasDropdown, grandchild, grandchildHasDropdown } = breadcrumbs[page] ?? breadcrumbs['overview']
   const isSimple = SIMPLE_PAGES.includes(page)
 
@@ -79,22 +80,26 @@ export default function TopBar({ page, period, onPeriodChange, onAskNory }: TopB
         )}
       </div>
 
-      {/* Right */}
-      {!isSimple ? (
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={onAskNory} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#e5e5e5] rounded-lg text-[14px] text-[#262626] hover:bg-[#fafafa] shadow-[0_1px_1px_rgba(47,62,77,0.04)] transition-colors">
-            <NorySparkle size={16} color="#735cf6" />
-            Ask Nory
-          </button>
-          <button className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f5f5]">
-            <DotsIcon size={16} color="#525252" />
-          </button>
-        </div>
-      ) : (
-        <button className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f5f5] shrink-0">
+      {/* Right — Hey, Nory shown on every page */}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onAskNory}
+          aria-pressed={askNoryOpen}
+          className={
+            askNoryOpen
+              // Pressed / selected: brighter lavender bg, dark icon+text, purple border
+              ? 'flex items-center gap-2 px-3.5 py-2 rounded-lg text-[14px] font-medium text-[#5b21b6] bg-[#ede9fe] border border-[#735cf6] transition-all'
+              // Default: solid purple gradient, white icon+text, transparent border (no layout shift), no shadow
+              : 'flex items-center gap-2 px-3.5 py-2 rounded-lg text-[14px] font-medium text-white bg-gradient-to-r from-[#735cf6] to-[#9b6cf8] border border-transparent hover:from-[#6248e8] hover:to-[#8a5cf0] transition-all'
+          }
+        >
+          <AiIcon size={16} color={askNoryOpen ? '#5b21b6' : '#ffffff'} />
+          Hey, Nory
+        </button>
+        <button className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[#f5f5f5]">
           <DotsIcon size={16} color="#525252" />
         </button>
-      )}
+      </div>
     </div>
   )
 }

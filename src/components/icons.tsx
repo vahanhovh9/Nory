@@ -110,6 +110,23 @@ export const NorySparkle = ({ size = 16, color = '#735cf6' }: { size?: number; c
   </svg>
 )
 
+// Four-point sparkle — the universal "AI" glyph
+export const AiIcon = ({ size = 16, color = '#ffffff' }: { size?: number; color?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+    {/* main 4-point star */}
+    <path
+      d="M8 1.2c.25 2.45 1.13 3.33 3.58 3.58.42.04.42.62 0 .66C9.13 5.69 8.25 6.57 8 9.02c-.04.42-.62.42-.66 0C7.09 6.57 6.21 5.69 3.76 5.44c-.42-.04-.42-.62 0-.66C6.21 4.53 7.09 3.65 7.34 1.2c.04-.42.62-.42.66 0Z"
+      fill={color}
+    />
+    {/* small accent star */}
+    <path
+      d="M12.4 9c.16 1.5.7 2.04 2.2 2.2.28.03.28.42 0 .45-1.5.16-2.04.7-2.2 2.2-.03.28-.42.28-.45 0-.16-1.5-.7-2.04-2.2-2.2-.28-.03-.28-.42 0-.45 1.5-.16 2.04-.7 2.2-2.2.03-.28.42-.28.45 0Z"
+      fill={color}
+      opacity="0.7"
+    />
+  </svg>
+)
+
 export const StarFilled = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
     <path

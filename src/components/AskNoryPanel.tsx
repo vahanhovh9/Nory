@@ -124,10 +124,8 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
     }, delay)
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="ask-nory-panel fixed right-0 top-0 h-full w-[400px] bg-white border-l border-[#e5e5e5] flex flex-col z-50 shadow-[-4px_0_24px_rgba(47,62,77,0.08)]">
+    <div className="h-full w-full bg-white border-l border-[#e5e5e5] flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e5e5] shrink-0">
         <div className="flex items-center gap-2">
