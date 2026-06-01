@@ -125,11 +125,36 @@ const SourcesIcon = ({ size = 14, color = '#525252' }: { size?: number; color?: 
   </svg>
 )
 
+interface Source { short: string; name: string; color: string }
 interface Message {
   role: 'ai' | 'user'
   content: string
-  isThinking?: boolean
+  keyInsight?: string
+  sources?: Source[]
+  steps?: string[]
+  durationMs?: number
 }
+
+// Sources Nory consults (small circles under an answer)
+const ANSWER_SOURCES: Source[] = [
+  { short: 'IN', name: 'Inventory counts', color: '#735cf6' },
+  { short: 'SQ', name: 'Square POS',       color: '#2563eb' },
+  { short: 'SW', name: 'SynQ waste log',   color: '#16a34c' },
+  { short: 'BF', name: 'Bidfood invoices', color: '#ea580c' },
+]
+
+// Steps Nory runs while answering
+const ANSWER_STEPS = [
+  'Checking inventory levels',
+  'Checking Square POS sales',
+  'Checking SynQ waste log',
+  'Comparing against last period',
+]
+
+const WASTE_INSIGHT =
+  "Waste is **1.33% of sales** (~**£1,290**) this week — **0.46pp better** than last period."
+const WASTE_BODY =
+  "Most of it is **over-portioning** in Back of House (~46%) and **fresh produce spoilage** (~31%).\n\nQuickest win: tighten par levels on chicken and herbs — roughly **£180/week** back."
 
 // 3 key actions Nory can take (welcome state)
 const QUICK_ACTIONS: { label: string; prompt: string; icon: React.ReactNode }[] = [
@@ -179,46 +204,109 @@ const AI_RESPONSES: Record<string, string> = {
     "Here's your week at a glance:\n\n📊 **21 reviews** received (↑2 vs last week)\n⭐ **4.51 average** rating (↑0.12)\n💬 **78% response rate** (↑1.02%)\n\n**Top themes:**\n- Coffee quality praised in 8 reviews\n- Sweet treats mentioned positively in 6\n- Service speed flagged in 3\n\n**Best performing location:** Dublin – Grafton St (4.8 ★)\n**Needs attention:** Galway – Shop St (3.9 ★)",
 }
 
-function TypingIndicator() {
-  return (
-    <div className="flex items-center gap-1 px-3 py-2.5">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="typing-dot inline-block w-1.5 h-1.5 rounded-full bg-[#735cf6]"
-          style={{ animationDelay: `${i * 0.2}s` }}
-        />
-      ))}
-    </div>
-  )
+function renderRich(content: string) {
+  return content.split('\n').map((line, i) => {
+    if (!line) return <br key={i} />
+    const parts = line.split(/(\*\*[^*]+\*\*)/g)
+    return (
+      <p key={i} className={i > 0 ? 'mt-1' : ''}>
+        {parts.map((part, j) =>
+          part.startsWith('**') && part.endsWith('**')
+            ? <strong key={j} className="font-semibold text-[#262626]">{part.slice(2, -2)}</strong>
+            : <span key={j}>{part}</span>,
+        )}
+      </p>
+    )
+  })
 }
 
-function AIMessage({ content }: { content: string }) {
-  const lines = content.split('\n')
+const Check = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
+    <path d="M2 6l3 3 5-5" stroke="#16a34c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+function AIMessage({ msg, onOpenSources }: { msg: Message; onOpenSources: () => void }) {
+  const [open, setOpen] = useState(false)
+  const hasSources = !!msg.sources?.length
+
   return (
     <div className="flex gap-2.5 max-w-full">
       <div className="w-6 h-6 rounded-full bg-[#f0edff] flex items-center justify-center shrink-0 mt-0.5">
         <AiIcon size={14} color="#735cf6" />
       </div>
-      <div className="flex-1 bg-[#fafafa] border border-[#e5e5e5] rounded-xl rounded-tl-sm px-3 py-2.5 text-[14px] leading-5 text-[#262626] tracking-[-0.15px]">
-        {lines.map((line, i) => {
-          if (!line) return <br key={i} />
-          // Render **bold** markdown
-          const parts = line.split(/(\*\*[^*]+\*\*)/g)
-          return (
-            <p key={i} className={i > 0 ? 'mt-1' : ''}>
-              {parts.map((part, j) =>
-                part.startsWith('**') && part.endsWith('**') ? (
-                  <strong key={j} className="font-semibold text-[#262626]">
-                    {part.slice(2, -2)}
-                  </strong>
-                ) : (
-                  <span key={j}>{part}</span>
-                ),
-              )}
+      <div className="flex-1 min-w-0 flex flex-col gap-3.5">
+        {/* Collapsed steps summary */}
+        {msg.steps && (
+          <div>
+            <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 text-[12px] text-[#737373] hover:text-[#525252] transition-colors">
+              <Check />
+              Worked across {msg.sources?.length ?? ANSWER_SOURCES.length} sources · {((msg.durationMs ?? 2000) / 1000).toFixed(1)}s
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+                <path d="M3 4.5 6 7.5 9 4.5" stroke="#a3a3a3" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {open && (
+              <ul className="mt-1.5 flex flex-col gap-1 pl-0.5">
+                {msg.steps.map(s => (
+                  <li key={s} className="flex items-center gap-1.5 text-[12px] text-[#737373]">
+                    <Check /> {s}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Key insight — larger highlighted callout */}
+        {msg.keyInsight && (
+          <div className="rounded-xl rounded-tl-sm bg-[#f5f3ff] border border-[#e3dbff] px-3.5 py-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <AiIcon size={12} color="#735cf6" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#735cf6]">Key insight</span>
+            </div>
+            <div className="text-[16px] leading-6 text-[#262626] font-medium">
+              {renderRich(msg.keyInsight)}
+            </div>
+          </div>
+        )}
+
+        {/* Answer body */}
+        {msg.content && (
+          <div className={`text-[14px] leading-5 text-[#262626] tracking-[-0.15px] ${msg.keyInsight ? 'px-1' : 'bg-[#fafafa] border border-[#e5e5e5] rounded-xl rounded-tl-sm px-3 py-2.5'}`}>
+            {renderRich(msg.content)}
+          </div>
+        )}
+
+        {/* Source circles */}
+        {hasSources && (
+          <button onClick={onOpenSources} className="flex items-center gap-2 self-start group">
+            <div className="flex -space-x-1.5">
+              {msg.sources!.map(s => (
+                <span
+                  key={s.short}
+                  title={s.name}
+                  className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-semibold text-white"
+                  style={{ background: s.color }}
+                >
+                  {s.short}
+                </span>
+              ))}
+            </div>
+            <span className="text-[12px] text-[#737373] group-hover:text-[#525252]">{msg.sources!.length} sources</span>
+          </button>
+        )}
+
+        {/* Add more sources banner */}
+        {hasSources && (
+          <div className="flex items-start gap-2 px-3 py-2 bg-[#faf9ff] rounded-xl">
+            <span className="mt-0.5"><AiIcon size={13} color="#735cf6" /></span>
+            <p className="flex-1 text-[12px] text-[#525252] leading-4">
+              Nory used {msg.sources!.length} sources. Adding <span className="font-medium text-[#262626]">Sysco invoices</span> would improve waste accuracy ~12%.{' '}
+              <button onClick={onOpenSources} className="text-[#735cf6] font-medium hover:underline">Add</button>
             </p>
-          )
-        })}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -248,17 +336,19 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
     },
   ])
   const [inputValue, setInputValue] = useState('')
-  const [isThinking, setIsThinking] = useState(false)
+  // run.stepIndex: -1 = "Thinking…", 0..n-1 = currently checking that step
+  const [run, setRun] = useState<{ stepIndex: number } | null>(null)
   const [thinkMode, setThinkMode] = useState<ThinkMode>('normal')
   const [thinkOpen, setThinkOpen] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [listening, setListening] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const busy = run !== null
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isThinking])
+  }, [messages, run])
 
   // Auto-grow the textarea (grows toward the top since it's anchored at the bottom).
   // When empty, pin to a single line — avoids a bad measurement while the panel slides in.
@@ -274,23 +364,42 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
   const hasText = inputValue.trim().length > 0
 
   const sendMessage = (text: string) => {
-    if (!text.trim() || isThinking) return
+    if (!text.trim() || busy) return
 
-    const userMsg: Message = { role: 'user', content: text }
-    setMessages((prev) => [...prev, userMsg])
+    setMessages(prev => [...prev, { role: 'user', content: text }])
     setInputValue('')
-    setIsThinking(true)
 
-    const delay = 1200 + Math.random() * 800
+    const started = Date.now()
+    const stepMs = thinkMode === 'quick' ? 450 : thinkMode === 'long' ? 950 : 650
 
-    setTimeout(() => {
-      const response =
-        AI_RESPONSES[text] ||
-        "That's a great question. Based on this week's data, I'm seeing some interesting patterns in your customer feedback. Let me dig deeper — could you clarify which metric you're most interested in improving?"
+    // Phase 1: "Thinking…"
+    setRun({ stepIndex: -1 })
 
-      setIsThinking(false)
-      setMessages((prev) => [...prev, { role: 'ai', content: response }])
-    }, delay)
+    // Phase 2: reveal steps one by one
+    let i = -1
+    const tick = () => {
+      i++
+      if (i < ANSWER_STEPS.length) {
+        setRun({ stepIndex: i })
+        setTimeout(tick, stepMs)
+      } else {
+        // Phase 3: deliver the answer with a highlighted key insight + collapsed steps + sources
+        const isWaste = /waste/i.test(text)
+        setRun(null)
+        setMessages(prev => [...prev, {
+          role: 'ai',
+          keyInsight: isWaste ? WASTE_INSIGHT : undefined,
+          content: isWaste
+            ? WASTE_BODY
+            : (AI_RESPONSES[text] ||
+              "Here's what I found across your data. I'm seeing a few patterns worth a closer look — want me to break any of these down or take an action on it?"),
+          sources: ANSWER_SOURCES,
+          steps: ANSWER_STEPS,
+          durationMs: Date.now() - started,
+        }])
+      }
+    }
+    setTimeout(tick, 700)
   }
 
   return (
@@ -315,21 +424,52 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-3 min-h-0">
-        {messages.map((msg, i) =>
-          msg.role === 'ai' ? (
-            <AIMessage key={i} content={msg.content} />
+      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-4 min-h-0">
+        {messages.map((msg, i) => {
+          // Hide the initial greeting once a conversation has started
+          if (i === 0 && messages.length > 1) return null
+          return msg.role === 'ai' ? (
+            <AIMessage key={i} msg={msg} onOpenSources={() => setSourcesOpen(true)} />
           ) : (
             <UserMessage key={i} content={msg.content} />
-          ),
-        )}
-        {isThinking && (
+          )
+        })}
+
+        {/* Live step sequence while answering */}
+        {run && (
           <div className="flex gap-2.5">
             <div className="w-6 h-6 rounded-full bg-[#f0edff] flex items-center justify-center shrink-0 mt-0.5">
               <AiIcon size={14} color="#735cf6" />
             </div>
-            <div className="bg-[#fafafa] border border-[#e5e5e5] rounded-xl rounded-tl-sm">
-              <TypingIndicator />
+            <div className="flex-1 min-w-0 pt-0.5">
+              {run.stepIndex === -1 ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[14px] text-[#735cf6]">Thinking</span>
+                  <span className="flex gap-1">
+                    {[0, 1, 2].map(d => (
+                      <span key={d} className="typing-dot w-1.5 h-1.5 rounded-full bg-[#735cf6] inline-block" style={{ animationDelay: `${d * 0.2}s` }} />
+                    ))}
+                  </span>
+                </div>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {ANSWER_STEPS.slice(0, run.stepIndex + 1).map((s, idx) => {
+                    const done = idx < run.stepIndex
+                    return (
+                      <li key={s} className="flex items-center gap-2 text-[13px] text-[#525252]">
+                        {done ? (
+                          <Check />
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="animate-spin shrink-0">
+                            <path d="M6 1a5 5 0 1 0 4.7 3.3" stroke="#735cf6" strokeWidth="1.4" strokeLinecap="round" />
+                          </svg>
+                        )}
+                        {s}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         )}
@@ -337,7 +477,7 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
       </div>
 
       {/* Welcome actions + hints — shown before the first user message */}
-      {messages.length <= 1 && !isThinking && (
+      {messages.length <= 1 && !busy && (
         <div className="px-4 pb-3 shrink-0 flex flex-col gap-3">
           {/* 3 key actions */}
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -385,7 +525,7 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
                 }
               }}
               placeholder="Ask a question or tell Nory what to do…"
-              disabled={isThinking}
+              disabled={busy}
               className="flex-1 bg-transparent text-[15px] text-[#262626] placeholder:text-[#737373] outline-none tracking-[-0.15px] leading-6 resize-none max-h-[140px] h-6"
             />
             <button
@@ -454,7 +594,7 @@ export default function AskNoryPanel({ isOpen, onClose }: AskNoryPanelProps) {
             {/* Send — 70% purple when empty, full brand purple when typed */}
             <button
               onClick={() => sendMessage(inputValue)}
-              disabled={!hasText || isThinking}
+              disabled={!hasText || busy}
               className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${hasText ? 'bg-[#735cf6] hover:bg-[#6248e8]' : 'bg-[#b3a4f9] cursor-default'}`}
             >
               <svg width="17" height="17" viewBox="0 0 14 14" fill="none">
